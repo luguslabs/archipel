@@ -98,14 +98,11 @@ class Chain {
       debug('canSendTransactions', `Node is sync: ${syncState}`);
 
       if (peersNumber === 0 || syncState === true) {
-        console.log('peersNumber is 0 or synch in progress. Wait 5 sec and retry');
-        console.log('peersNumber :' + peersNumber);
-        console.log('syncState :' + syncState);
+        console.log(`Peers number is ${peersNumber} and Sync State is ${syncState}. We will retry in 5 seconds.`);
         await new Promise(resolve => setTimeout(resolve, 5000));
         peersNumber = await this.getPeerNumber();
         syncState = await this.getSyncState();
-        console.log('new peersNumber :' + peersNumber);
-        console.log('new syncState :' + syncState);
+        console.log(`After retry peers number is ${peersNumber} and Sync State is ${syncState}.`);
       }
 
       // If node has any peers and is not in synchronizing chain

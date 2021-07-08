@@ -206,7 +206,7 @@ class Polkadot {
 
       // Check if the key was already imported
       if (this.importedKeys.includes(publicKey)) {
-        console.log(`Key ${publicKey} was already imported to keystore...`);
+        debug('importAKey', `Key ${publicKey} was already imported to keystore...`);
         return;
       }
 

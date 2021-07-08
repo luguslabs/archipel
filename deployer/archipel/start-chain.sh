@@ -1,5 +1,16 @@
 #!/bin/bash
 
+#prefix output
+# setup fd-3 to point to the original stdout
+exec 3>&1
+# setup fd-4 to point to the original stderr
+exec 4>&2
+# get the prefix from SUPERVISOR_PROCESS_NAME environement variable
+printf -v PREFIX "%-10.10s" ${SUPERVISOR_PROCESS_NAME}
+# reassign stdout and stderr to a preprocessed and redirected to the original stdout/stderr (3 and 4) we have create eralier
+exec 1> >( perl -ne '$| = 1; print "'"${PREFIX}"' | $_"' >&3)
+exec 2> >( perl -ne '$| = 1; print "'"${PREFIX}"' | $_"' >&4)
+
 #detect error in piped command
 set -eo pipefail
 
@@ -25,41 +36,39 @@ if [ ! -z "$CONFIG_FILE" ]; then
             exit 1
       fi
 
-    #unpack config file
-    if [ -f "/config/archipel-config.zip" ]; then
-        echo "start-chain.sh : unzip /config/archipel-config.zip"
-        #if config file password was set unzip with password
-        if [ ! -z "$CONFIG_FILE_PASSWORD" ]; then
-            echo "start-chain.sh : unzip if first time  with -u option."
-            unzip -u -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
-            echo "start-chain.sh : refresh all configs files with unzip -f option."
-            unzip -f -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
-        else
-            echo "start-chain.sh : unzip if first time  with -u option."
-            unzip -u -o /config/archipel-config.zip -d /config
-            echo "start-chain.sh : refresh all configs files with unzip -f option."
-            unzip -f -o /config/archipel-config.zip -d /config
-        fi
-    else
-        echo "start-chain.sh : no file /config/archipel-config.zip"
-    fi
+      #unpack config file
+      if [ -f "/config/archipel-config.zip" ]; then
+            echo "Unzip archipel-config.zip file from /config directory."
+            #if config file password was set unzip with password
+            if [ ! -z "$CONFIG_FILE_PASSWORD" ]; then
+                  if [ ! -z "$DEBUG" ]; then
+                        echo "Unzip if first time with -u option."
+                  fi
+                  unzip -u -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
+                  if [ ! -z "$DEBUG" ]; then
+                        echo "Refresh all configs files with unzip -f option."
+                  fi
+                  unzip -f -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
+            else
+                  if [ ! -z "$DEBUG" ]; then
+                        echo "Unzip if first time  with -u option."
+                  fi
+                  unzip -u -o /config/archipel-config.zip -d /config
+                  if [ ! -z "$DEBUG" ]; then
+                        echo "Refresh all configs files with unzip -f option."
+                  fi
+                  unzip -f -o /config/archipel-config.zip -d /config
+            fi
+      else
+            echo "No config file found in /config/archipel-config.zip"
+            exit 1
+      fi
 
       #check if node id is valid
       NODES_NUMBER=$(cat /config/config.json | jq ".nodesNumber")
       if [ "$NODE_ID" -eq "0" ] || [ "$NODE_ID" -gt "$NODES_NUMBER" ]; then
             echo "Invalid node number! Node number must be between 1 and $NODES_NUMBER..."
             exit 1
-      fi
-
-      #set variables from config file
-      #get NODES_ROLE
-      if [ -z "$NODES_ROLE" ]; then
-            NODES_ROLE=$(cat /config/config.json | jq ".nodesRole")
-            check_cmd $? 'retrieve NODES_ROLE'
-            if [ "$NODES_ROLE" == "null" ]; then
-                  echo "Assure old config support. Force config NODES_ROLE to 'operator,operator,operator'"
-                  NODES_ROLE="operator,operator,operator"
-            fi
       fi
 
       #set variables from config file if they are not set
@@ -97,7 +106,7 @@ if [ ! -z "$CONFIG_FILE" ]; then
       fi
 fi
 
-#check if env vars are set
+#check if all necessary vars are set
 if [ -z "$ARCHIPEL_NODE_ALIAS" ]
 then
       echo "\$ARCHIPEL_NODE_ALIAS is empty"
@@ -134,9 +143,12 @@ then
       exit 1
 fi
 
-echo "ARCHIPEL_AUTHORITIES_SR25519_LIST is: $ARCHIPEL_AUTHORITIES_SR25519_LIST"
+if [ ! -z "$DEBUG" ]; then
+      echo "ARCHIPEL_AUTHORITIES_SR25519_LIST is: $ARCHIPEL_AUTHORITIES_SR25519_LIST"
+fi
+
 #sanitize ARCHIPEL_AUTHORITIES_SR25519_LIST
-#remove potential bad char
+#remove potential bad chars
 ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN=$(echo $ARCHIPEL_AUTHORITIES_SR25519_LIST | tr -d ' ' | tr -d '"' | tr -d '[' | tr -d ']' | tr "," "\n")
 
 if [ -z "$ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN" ]
@@ -145,9 +157,12 @@ then
       exit 1
 fi
 
-echo "ARCHIPEL_AUTHORITIES_ED25519_LIST is: $ARCHIPEL_AUTHORITIES_ED25519_LIST"
+if [ ! -z "$DEBUG" ]; then
+      echo "ARCHIPEL_AUTHORITIES_ED25519_LIST is: $ARCHIPEL_AUTHORITIES_ED25519_LIST"
+fi
+
 #sanitize ARCHIPEL_AUTHORITIES_LIST
-#remove potential bad  char
+#remove potential bad chars
 ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN=$(echo $ARCHIPEL_AUTHORITIES_ED25519_LIST | tr -d ' ' | tr -d '"' | tr -d '[' | tr -d ']' | tr "," "\n")
 
 if [ -z "$ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN" ]
@@ -193,12 +208,14 @@ then
       exit 1
 fi
 
-echo "decoded from seed : ARCHIPEL_SS58_ADDRESS_ED25519 : $ARCHIPEL_SS58_ADDRESS_ED25519"
-echo "decoded from seed : ARCHIPEL_PUBLIC_KEY_ED25519 : $ARCHIPEL_PUBLIC_KEY_ED25519"
-echo "decoded from seed : ARCHIPEL_SS58_ADDRESS_SR25519 : $ARCHIPEL_SS58_ADDRESS_SR25519"
-echo "decoded from seed : ARCHIPEL_PUBLIC_KEY_SR25519 : $ARCHIPEL_PUBLIC_KEY_SR25519"
-echo "ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN : $ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN"
-echo "ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN : $ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN"
+if [ ! -z "$DEBUG" ]; then
+      echo "decoded from seed : ARCHIPEL_SS58_ADDRESS_ED25519 : $ARCHIPEL_SS58_ADDRESS_ED25519"
+      echo "decoded from seed : ARCHIPEL_PUBLIC_KEY_ED25519 : $ARCHIPEL_PUBLIC_KEY_ED25519"
+      echo "decoded from seed : ARCHIPEL_SS58_ADDRESS_SR25519 : $ARCHIPEL_SS58_ADDRESS_SR25519"
+      echo "decoded from seed : ARCHIPEL_PUBLIC_KEY_SR25519 : $ARCHIPEL_PUBLIC_KEY_SR25519"
+      echo "ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN : $ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN"
+      echo "ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN : $ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN"
+fi
 
 # Valorized config spec chain template with envs varabales
 if [ ! -f "/root/chain/archipelTemplateSpec.json" ]
@@ -206,14 +223,6 @@ then
       echo "missing chain spec template /root/chain/archipelTemplateSpec.json"
       exit 1
 fi
-
-if [ -z "$NODES_ROLE" ]; then
-  echo "Assure old config support. Force config NODES_ROLE to 'operator,operator,operator'"
-  NODES_ROLE="operator,operator,operator"
-fi
-echo "NODES_ROLE=$NODES_ROLE"
-NODES_ROLE=$(echo $NODES_ROLE | sed 's/\"//g')
-IFS=',' read -ra rolesArray <<< "$NODES_ROLE"
 
 # clear bootnodes array in template 
 cp  -f /root/chain/archipelTemplateSpec.json /root/chain/archipelSpec.json
@@ -234,15 +243,8 @@ mv /tmp/archipelSpecTmp.json /root/chain/archipelSpec.json
 indexArray=0
 for AUTH in $ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN
 do
-      NODE_ROLE=${rolesArray[indexArray]}
-      NODE_ROLE=$(echo $NODE_ROLE | sed 's/\"//g')
-      if [ "$NODE_ROLE" == "sentry" ] || [ "$NODE_ROLE" == "operator" ]
-      then
-            cat /root/chain/archipelSpec.json | jq --arg AUTH $AUTH '.genesis.runtime.palletAura.authorities += [$AUTH]'  > /tmp/archipelSpecTmp.json
-            mv /tmp/archipelSpecTmp.json /root/chain/archipelSpec.json
-      else
-            echo "skip add in ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN because NODE_ROLE=$NODE_ROLE "
-      fi
+      cat /root/chain/archipelSpec.json | jq --arg AUTH $AUTH '.genesis.runtime.palletAura.authorities += [$AUTH]'  > /tmp/archipelSpecTmp.json
+      mv /tmp/archipelSpecTmp.json /root/chain/archipelSpec.json
       indexArray=$(( $indexArray + 1 ))
 done
 
@@ -253,15 +255,8 @@ LIST_TO_INJECT=""
 indexArray=0
 for ITEM in $ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN
 do
-      NODE_ROLE=${rolesArray[indexArray]}
-      NODE_ROLE=$(echo $NODE_ROLE | sed 's/\"//g')
-      if [ "$NODE_ROLE" == "sentry" ] || [ "$NODE_ROLE" == "operator" ]
-      then
-            ITEM_OUTPUT=$(echo "[\"$ITEM\",1]")
-            LIST_TO_INJECT="$LIST_TO_INJECT $ITEM_OUTPUT,"
-      else
-            echo "skip add in ARCHIPEL_AUTHORITIES_ED25519_LIST_CLEAN because NODE_ROLE=$NODE_ROLE "
-      fi
+      ITEM_OUTPUT=$(echo "[\"$ITEM\",1]")
+      LIST_TO_INJECT="$LIST_TO_INJECT $ITEM_OUTPUT,"
       indexArray=$(( $indexArray + 1 ))
 done
 
@@ -276,22 +271,14 @@ LIST_TO_INJECT=""
 indexArray=0
 for ITEM in $ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN
 do
-      NODE_ROLE=${rolesArray[indexArray]}
-      NODE_ROLE=$(echo $NODE_ROLE | sed 's/\"//g')
-      if [ "$NODE_ROLE" == "sentry" ] || [ "$NODE_ROLE" == "operator" ]
-      then
-            ITEM_OUTPUT=$(echo "[\"$ITEM\",1152921504606847000]")
-            LIST_TO_INJECT="$LIST_TO_INJECT $ITEM_OUTPUT,"
-      else
-            echo "skip add in ARCHIPEL_AUTHORITIES_SR25519_LIST_CLEAN because NODE_ROLE=$NODE_ROLE "
-      fi
+      ITEM_OUTPUT=$(echo "[\"$ITEM\",1152921504606847000]")
+      LIST_TO_INJECT="$LIST_TO_INJECT $ITEM_OUTPUT,"
       indexArray=$(( $indexArray + 1 ))
 done
 
 # remove last , of loop
 LIST_TO_INJECT=${LIST_TO_INJECT%?} 
 sed -i "s/\"REPLACE_BALANCES_HERE\"/`echo $LIST_TO_INJECT`/g" /root/chain/archipelSpec.json
-
 
 # reserved peers list construct
 RESERVED_PEERS_PARAM="--reserved-only"
@@ -300,15 +287,7 @@ then
       indexArray=0
       for ITEM in $(echo $ARCHIPEL_RESERVED_PEERS |  tr "," " ")
       do
-            NODE_ROLE=${rolesArray[indexArray]}
-            NODE_ROLE=$(echo $NODE_ROLE | sed 's/\"//g')
-            if [ "$NODE_ROLE" == "sentry" ] || [ "$NODE_ROLE" == "operator" ]
-            then
-                  echo "NODE_ROLE = $NODE_ROLE. Include  PeerId in reserved peers list"
-                  RESERVED_PEERS_PARAM="$RESERVED_PEERS_PARAM --reserved-nodes $ITEM"
-            else
-                  echo "NODE_ROLE = sentryExternal. Do NOT include PeerId in reserved peers list"
-            fi
+            RESERVED_PEERS_PARAM="$RESERVED_PEERS_PARAM --reserved-nodes $ITEM"
             indexArray=$(( $indexArray + 1 ))
       done
 fi
@@ -318,7 +297,10 @@ if [ ! -z "$ARCHIPEL_TELEMETRY_URL" ] && [ ! "--no-telemetry" == "$ARCHIPEL_TELE
 then
       ARCHIPEL_TELEMETRY_URL_CMD="$ARCHIPEL_TELEMETRY_URL"
 fi
-echo "ARCHIPEL_TELEMETRY_URL_CMD: $ARCHIPEL_TELEMETRY_URL_CMD"
+
+if [ ! -z "$DEBUG" ]; then
+      echo "ARCHIPEL_TELEMETRY_URL_CMD: $ARCHIPEL_TELEMETRY_URL_CMD"
+fi
 
 ARCHIPEL_TELEMETRY_LOGLEVEL_CMD="0"
 if [ ! -z "$ARCHIPEL_TELEMETRY_LOGLEVEL" ]
@@ -333,22 +315,34 @@ fi
 echo "Creating keystore directory..."
 mkdir -p /root/chain/data/chains/archipel/keystore
 
-echo "Removing 0x from public keys..."
+if [ ! -z "$DEBUG" ]; then
+      echo "Removing 0x from public keys..."
+fi
+
 ED25519_WITHOUT_0X=$(sed -E "s/0x(.*)/\1/g" <<< "$ARCHIPEL_PUBLIC_KEY_ED25519")
 SR25519_WITHOUT_0X=$(sed -E "s/0x(.*)/\1/g" <<< "$ARCHIPEL_PUBLIC_KEY_SR25519")
-echo "ED25519_WITHOUT_0X: $ED25519_WITHOUT_0X"
-echo "SR25519_WITHOUT_0X: $SR25519_WITHOUT_0X"
 
-echo "Appending prefixes to create filename..."
+if [ ! -z "$DEBUG" ]; then
+      echo "ED25519_WITHOUT_0X: $ED25519_WITHOUT_0X"
+      echo "SR25519_WITHOUT_0X: $SR25519_WITHOUT_0X"
+      echo "Appending prefixes to create filename..."
+fi
+
 ED25519_FILE_PATH=$(echo "6772616e$ED25519_WITHOUT_0X")
 SR25519_FILE_PATH=$(echo "61757261$SR25519_WITHOUT_0X")
-echo "ED25519_FILE_PATH: $ED25519_FILE_PATH"
-echo "SR25519_FILE_PATH: $SR25519_FILE_PATH"
+
+if [ ! -z "$DEBUG" ]; then
+      echo "ED25519_FILE_PATH: $ED25519_FILE_PATH"
+      echo "SR25519_FILE_PATH: $SR25519_FILE_PATH"
+fi
 
 echo "Writing key seed into files..."
 echo "\"$ARCHIPEL_KEY_SEED\"" > "/root/chain/data/chains/archipel/keystore/$ED25519_FILE_PATH"
 echo "\"$ARCHIPEL_KEY_SEED\"" > "/root/chain/data/chains/archipel/keystore/$SR25519_FILE_PATH"
-echo "RESERVED_PEERS_PARAM: $RESERVED_PEERS_PARAM"
+
+if [ ! -z "$DEBUG" ]; then
+      echo "RESERVED_PEERS_PARAM: $RESERVED_PEERS_PARAM"
+fi
 
 # if archipel chain has additionals params
 if [ "--no-telemetry" == "$ARCHIPEL_TELEMETRY_URL_CMD" ]

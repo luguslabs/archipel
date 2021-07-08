@@ -75,8 +75,8 @@ const validatePublicIps = ips => {
 // Validate nodes role support
 const validateNodesRole = roles => {
   roles.split(',').forEach(role => {
-    if (role != 'sentry' && role != 'operator' && role != 'sentryExternal' ) {
-      throw Error('Bad role node :' + role + '. Archipel node role must be sentry, sentryExternal or operator');
+    if (role != 'operator' && role != 'noservice' ) {
+      throw Error('Bad role node :' + role + '. Archipel node role must be operator or noservice');
     }
   })
 };
@@ -147,7 +147,10 @@ const generateConfig = async () => {
     // Add node number to config
     config.nodesNumber = externalIPAddresses.length;
 
-    config = { ...config, ...await generateServicesConfig(configData, config.nodesNumber) };
+    // Add service node number to config
+    config.serviceNodesNumber = configData.serviceNodesNumber;
+
+    config = { ...config, ...await generateServicesConfig(configData, config.serviceNodesNumber) };
 
     // Adding wireguard config
     config = { ...config, ...await generateWireguardConfig(externalIPAddresses, wireguardPortsList) };

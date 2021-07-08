@@ -1,5 +1,16 @@
 #!/bin/bash
 
+#prefix output
+# setup fd-3 to point to the original stdout
+exec 3>&1
+# setup fd-4 to point to the original stderr
+exec 4>&2
+# get the prefix from SUPERVISOR_PROCESS_NAME environement variable
+printf -v PREFIX "%-10.10s" ${SUPERVISOR_PROCESS_NAME}
+# reassign stdout and stderr to a preprocessed and redirected to the original stdout/stderr (3 and 4) we have create eralier
+exec 1> >( perl -ne '$| = 1; print "'"${PREFIX}"' | $_"' >&3)
+exec 2> >( perl -ne '$| = 1; print "'"${PREFIX}"' | $_"' >&4)
+
 #detect error in piped command
 set -eo pipefail
 
@@ -27,21 +38,30 @@ if [ ! -z "$CONFIG_FILE" ]; then
 
     #unpack config file
     if [ -f "/config/archipel-config.zip" ]; then
-        echo "start-orchestrator.sh : unzip /config/archipel-config.zip"
-        #if config file password was set unzip with password
-        if [ ! -z "$CONFIG_FILE_PASSWORD" ]; then
-            echo "start-orchestrator.sh : unzip if first time  with -u option."
-            unzip -u -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
-            echo "start-orchestrator.sh : refresh all configs files with unzip -f option."
-            unzip -f -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
-        else 
-            echo "start-orchestrator.sh : unzip if first time  with -u option."
-            unzip -u -o /config/archipel-config.zip -d /config
-            echo "start-orchestrator.sh : refresh all configs files with unzip -f option."
-            unzip -f -o /config/archipel-config.zip -d /config
-        fi
+          echo "Unzip archipel-config.zip file from /config directory."
+          #if config file password was set unzip with password
+          if [ ! -z "$CONFIG_FILE_PASSWORD" ]; then
+                if [ ! -z "$DEBUG" ]; then
+                      echo "Unzip if first time with -u option."
+                fi
+                unzip -u -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
+                if [ ! -z "$DEBUG" ]; then
+                      echo "Refresh all configs files with unzip -f option."
+                fi
+                unzip -f -P "$CONFIG_FILE_PASSWORD" -o /config/archipel-config.zip -d /config
+          else
+                if [ ! -z "$DEBUG" ]; then
+                      echo "Unzip if first time  with -u option."
+                fi
+                unzip -u -o /config/archipel-config.zip -d /config
+                if [ ! -z "$DEBUG" ]; then
+                      echo "Refresh all configs files with unzip -f option."
+                fi
+                unzip -f -o /config/archipel-config.zip -d /config
+          fi
     else
-        echo "start-orchestrator.sh : no file /config/archipel-config.zip"
+          echo "No config file found in /config/archipel-config.zip"
+          exit 1
     fi
 
     #check if node id is valid
@@ -63,6 +83,13 @@ if [ ! -z "$CONFIG_FILE" ]; then
         IFS=',' read -ra rolesArray <<< "$NODES_ROLE"
         index=$(( $NODE_ID - 1 ))
         NODE_ROLE=${rolesArray[index]}
+
+        #if node role is no service this process will sleep eternally
+        if [ "$NODE_ROLE" == "noservice" ]; then
+          echo "This node is a NO SERVICE node. So the orchestrator will sleep eternally..."
+          sleep infinity
+          exit 1
+        fi
     fi
 
     if [ -z "$NODE_GROUP" ]; then

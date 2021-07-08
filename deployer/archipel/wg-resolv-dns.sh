@@ -1,4 +1,16 @@
 #!/bin/bash
+
+#prefix output
+# setup fd-3 to point to the original stdout
+exec 3>&1
+# setup fd-4 to point to the original stderr
+exec 4>&2
+# get the prefix from SUPERVISOR_PROCESS_NAME environement variable
+printf -v PREFIX "%-10.10s" ${SUPERVISOR_PROCESS_NAME}
+# reassign stdout and stderr to a preprocessed and redirected to the original stdout/stderr (3 and 4) we have create eralier
+exec 1> >( perl -ne '$| = 1; print "'"${PREFIX}"' | $_"' >&3)
+exec 2> >( perl -ne '$| = 1; print "'"${PREFIX}"' | $_"' >&4)
+
 # SPDX-License-Identifier: GPL-2.0
 #
 # Copyright (C) 2015-2020 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
